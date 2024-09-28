@@ -1,6 +1,33 @@
-from fastapi import FastAPI
-from .routes import router
+# app/main.py
+
+from fastapi import FastAPI, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select  # Import select from sqlalchemy.future
+from app.database import get_db
+from app.models import Job
+from app.schemas import JobCreate
+
 
 app = FastAPI()
 
-app.include_router(router)
+@app.post("/jobs/")
+async def create_job(job: JobCreate, db: AsyncSession = Depends(get_db)):
+    new_job = Job(title=job.title, location=job.location)
+    db.add(new_job)
+    await db.commit()
+    await db.refresh(new_job)
+    return new_job
+
+@app.get("/jobs/")
+async def read_jobs(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Job))
+    jobs = result.scalars().all()
+    return jobs
+
+@app.get("/")
+async def read_root():
+    return {"message": "Welcome to the Job Search Service!"}
+
+
+
+
