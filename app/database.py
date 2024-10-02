@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Define the database URL (replace with your actual username and password)
-DATABASE_URL = "mysql+aiomysql://root:132620@localhost/job_search_db"
+DATABASE_URL = "mysql://root:13262018@jobsearch.cvna6lesyuo6.us-east-1.rds.amazonaws.com:3306/jobsearch"
 
 # Create an async engine
 engine = create_async_engine(DATABASE_URL, echo=True)
