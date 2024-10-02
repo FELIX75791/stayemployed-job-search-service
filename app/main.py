@@ -8,6 +8,31 @@ from app.models import Job
 from app.schemas import JobCreate
 import os
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException
+from sqlalchemy.orm import Session
+from pydantic import BaseModel
+from .database import SessionLocal, engine
+from . import models
+
+app = FastAPI()
+
+class JobCreate(BaseModel):
+    title: str
+    description: str
+    location: str
+
+@app.post("/jobs/")
+def create_job(job: JobCreate):
+    db: Session = SessionLocal()
+    db_job = models.Job(
+        title=job.title,
+        description=job.description,
+        location=job.location
+    )
+    db.add(db_job)
+    db.commit()
+    db.refresh(db_job)
+    return db_job
 
 load_dotenv()
 
