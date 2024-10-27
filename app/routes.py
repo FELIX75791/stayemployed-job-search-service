@@ -1,56 +1,56 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from app.database import get_db
-from app.models import Job  # Assuming a Job model is defined
-from app.schemas import JobCreate  # Assuming JobCreate is a schema for job creation
-
+from app.database import get_db_sync, get_db_async
+from app.models import Job
+from app.schemas import JobCreate
 
 router = APIRouter()
-#Create
+
+
+# Create a job (sync)
 @router.post("/jobs/", response_model=JobCreate)
-async def create_job(job: JobCreate, db: AsyncSession = Depends(get_db)):
-    new_job = Job(title=job.title, location=job.location)  # Adjust fields as per Job model
+def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
+    new_job = Job(title=job.title, location=job.location)
     db.add(new_job)
-    await db.commit()
-    await db.refresh(new_job)
+    db.commit()
+    db.refresh(new_job)
     return new_job
 
-#Read
+
+# Read all jobs (async)
 @router.get("/jobs/")
-async def read_jobs(db: AsyncSession = Depends(get_db)):
+async def read_jobs(db: AsyncSession = Depends(get_db_async)):
     result = await db.execute(select(Job))
     jobs = result.scalars().all()
     return jobs
 
-#Update
-@router.put("/jobs/{job_id}", response_model=JobCreate)
-async def update_job(job_id: int, job: JobCreate, db: AsyncSession = Depends(get_db)):
-    # Find the job by ID
-    result = await db.execute(select(Job).where(Job.id == job_id))
-    job_to_update = result.scalar_one_or_none()
 
+# Update a job by ID (sync)
+@router.put("/jobs/{job_id}", response_model=JobCreate)
+def update_job(job_id: int, job: JobCreate, db: Session = Depends(get_db_sync)):
+    job_to_update = db.query(Job).filter(Job.id == job_id).first()
     if job_to_update is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    # Update fields
     job_to_update.title = job.title
     job_to_update.location = job.location
-    await db.commit()
-    await db.refresh(job_to_update)
+    db.commit()
+    db.refresh(job_to_update)
     return job_to_update
 
-#Delete
-@router.delete("/jobs/{job_id}")
-async def delete_job(job_id: int, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job).where(Job.id == job_id))
-    job_to_delete = result.scalar_one_or_none()
 
+# Delete a job by ID (sync)
+@router.delete("/jobs/{job_id}")
+def delete_job(job_id: int, db: Session = Depends(get_db_sync)):
+    job_to_delete = db.query(Job).filter(Job.id == job_id).first()
     if job_to_delete is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    await db.delete(job_to_delete)
-    await db.commit()
+    db.delete(job_to_delete)
+    db.commit()
     return {"message": "Job deleted successfully"}
+
 
 
