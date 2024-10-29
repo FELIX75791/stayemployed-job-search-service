@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from sqlalchemy import func
 from app.database import get_db_sync, get_db_async
 from app.models import Job
 from app.schemas import JobCreate
@@ -18,14 +19,31 @@ def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
     db.refresh(new_job)
     return new_job
 
-
-# Read all jobs (async)
+# Read all jobs (async) with pagination
 @router.get("/jobs/")
-async def read_jobs(db: AsyncSession = Depends(get_db_async)):
-    result = await db.execute(select(Job))
-    jobs = result.scalars().all()
-    return jobs
+async def read_jobs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1),
+    db: AsyncSession = Depends(get_db_async)
+):
+    # Calculate the offset based on the current page and page size
+    offset = (page - 1) * page_size
 
+    # Query the jobs with limit and offset for pagination
+    result = await db.execute(select(Job).offset(offset).limit(page_size))
+    jobs = result.scalars().all()
+
+    # Query the total count of jobs (for providing pagination metadata)
+    total_count = await db.scalar(select(func.count()).select_from(Job))
+
+    # Return paginated results with metadata
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total_count": total_count,
+        "total_pages": (total_count + page_size - 1) // page_size,  # calculate total pages
+        "jobs": jobs
+    }
 
 # Update a job by ID (sync)
 @router.put("/jobs/{job_id}", response_model=JobCreate)
