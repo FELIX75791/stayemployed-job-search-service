@@ -1,32 +1,33 @@
-# app/main.py
-
-from fastapi import FastAPI, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select  # Import select from sqlalchemy.future
-from app.database import get_db
-from app.models import Job
-from app.schemas import JobCreate
-
-
+from fastapi import FastAPI,Request
+from app.routes import router  # Import the router from routes.py
+from starlette.middleware.base import BaseHTTPMiddleware
+import time
 app = FastAPI()
 
-@app.post("/jobs/")
-async def create_job(job: JobCreate, db: AsyncSession = Depends(get_db)):
-    new_job = Job(title=job.title, location=job.location)
-    db.add(new_job)
-    await db.commit()
-    await db.refresh(new_job)
-    return new_job
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Log request details
+        start_time = time.time()
+        print(f"Request: {request.method} {request.url}")
 
-@app.get("/jobs/")
-async def read_jobs(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job))
-    jobs = result.scalars().all()
-    return jobs
+        # Process request and get response
+        response = await call_next(request)
+
+        # Calculate and log response time
+        process_time = time.time() - start_time
+        print(f"Completed in {process_time:.4f} seconds")
+
+        return response
+
+# Add middleware to the FastAPI app
+app.add_middleware(LoggingMiddleware)
+# Register the router for job-related routes
+app.include_router(router)
 
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the Job Search Service!"}
+
 
 
 
