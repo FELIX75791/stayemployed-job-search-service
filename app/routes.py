@@ -53,4 +53,15 @@ def delete_job(job_id: int, db: Session = Depends(get_db_sync)):
     return {"message": "Job deleted successfully"}
 
 
+# Add an endpoint to fetch a job by ID
+@router.get("/jobs/{job_id}")
+async def get_job(job_id: int, db: AsyncSession = Depends(get_db_async)):
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    return job
+
 
