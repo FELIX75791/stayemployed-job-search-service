@@ -1,5 +1,11 @@
 from sqlalchemy import Column, Integer, String
 from app.database import Base
+from pydantic import BaseModel
+
+BASE_URL = "http://3.213.98.62:8080"
+class Link(BaseModel):
+    rel: str
+    href: str
 
 
 class Job(Base):
