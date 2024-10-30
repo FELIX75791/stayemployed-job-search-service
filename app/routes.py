@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 # Create a job (sync)
-@router.post("/jobs/")
+@router.post("/jobs/", status_code=201)
 def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
     new_job = Job(**job.dict())
     db.add(new_job)
