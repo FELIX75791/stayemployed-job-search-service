@@ -6,9 +6,39 @@ from sqlalchemy import func
 from app.database import get_db_sync, get_db_async
 from app.models import Job, Link, BASE_URL
 from app.schemas import JobCreate
+import requests
+from app.main import send_email
+
 router = APIRouter()
+LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
+LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
 
+def fetch_jobs_from_linkedin():
+    headers = {"Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"}
+    response = requests.get(LINKEDIN_API_URL, headers=headers)
+    if response.status_code == 200:
+        return response.json()  # Adjust this to match LinkedIn's job data format
+    else:
+        raise Exception(f"Error fetching jobs: {response.text}")
 
+@router.post("/jobs/fetch")
+def fetch_jobs(db: Session = Depends(get_db_sync)):
+    jobs = fetch_jobs_from_linkedin()
+    for job in jobs:
+        new_job = Job(
+            title=job.get("title", "Unknown"),
+            location=job.get("location", "Unknown")
+        )
+        db.add(new_job)
+        db.commit()
+        db.refresh(new_job)
+
+        # Notify users
+        users = ["user1@example.com", "user2@example.com"]  # Replace with actual user emails list
+        for user in users:
+            send_email(user, "New Job Posted", f"Check out the new job: {new_job.title} at {new_job.location}")
+
+    return {"message": "Jobs fetched and users notified successfully"}
 # Create a job (sync)
 @router.post("/jobs/", status_code=201)
 def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
