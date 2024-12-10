@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -8,79 +8,116 @@ from app.models import Job, Link, BASE_URL
 from app.schemas import JobCreate
 import requests
 from app.main import send_email
+from careerjet_api import CareerjetAPIClient
+from pydantic import BaseModel
 
 router = APIRouter()
-LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
-LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
+# LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
+# LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
+
+@router.post("/careerjet/fetch-jobs")
+def fetch_jobs_from_careerjet(request: Request, item: dict, db: Session = Depends(get_db_sync)):
+  cj  =  CareerjetAPIClient("en_US")
+  # user_ip = request.client.host
+  # full_url = str(request.url)
+  location = item["location"]
+  keywords = item["keywords"]
+  sort = item["sort"]
+  contract_period = item["contract_period"]
+
+  available_jobs = cj.search({
+    'location': location,                 
+    'keywords': keywords,
+    'sort': sort,   
+    'contractperiod': contract_period,             
+    'affid': '213e213hd12344552',
+    'user_ip': '11.22.33.44',
+    'url': 'http://example.com',
+    'user_agent': 'Mozilla/5.0',
+  })
+
+  job_list = available_jobs["jobs"]
+
+  for job_data in job_list:
+    # get job information from api
+    job_title = job_data.get("title")
+    job_location = job_data.get("locations")
+    # store to db
+    new_job = Job(title=job_title, location=job_location)
+    db.add(new_job)
+    db.commit()
+    db.refresh(new_job)
+
+  return {"message": "Jobs fetched and saved successfully", "count": len(job_list)}
+
+# @router.post("/linkedin/fetch-jobs")
+# def fetch_jobs_from_linkedin(db: Session = Depends(get_db_sync)):
+#     headers = {
+#         "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"
+#     }
+#     params = {
+#         "keywords": "Software Engineer",  # adjust keywords accordingly
+#         "location": "United States"  # adjust location accordingly
+#     }
+
+#     response = requests.get(LINKEDIN_API_URL, headers=headers, params=params)
+
+#     if response.status_code != 200:
+#         raise HTTPException(status_code=500, detail=f"Failed to fetch jobs: {response.text}")
+
+#     jobs = response.json().get("elements", [])
+
+#     for job_data in jobs:
+#         # get job information from api
+#         job_title = job_data.get("title", "Unknown")
+#         job_location = job_data.get("location", "Unknown")
+
+#         # store to db
+#         new_job = Job(title=job_title, location=job_location)
+#         db.add(new_job)
+#         db.commit()
+#         db.refresh(new_job)
+
+#     return {"message": "Jobs fetched and saved successfully", "count": len(jobs)}
+
+# @router.get("/linkedin/auth")
+# def linkedin_auth():
+#     client_id = "86us1qxbbhr10l" # "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
+#     redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
+#     state = "8T0dAfxEXzf4xqbKSCum_Q"  # Replace with a secure random string
+#     scope = "r_liteprofile r_emailaddress"  # Add scopes required for your app
+#     auth_url = (
+#         f"https://www.linkedin.com/oauth/v2/authorization"
+#         f"?response_type=code"
+#         f"&client_id={client_id}"
+#         f"&redirect_uri={redirect_uri}"
+#         f"&state={state}"
+#         f"&scope={scope}"
+#     )
+#     return {"authorization_url": auth_url}
 
 
-@router.post("/linkedin/fetch-jobs")
-def fetch_jobs_from_linkedin(db: Session = Depends(get_db_sync)):
-    headers = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"
-    }
-    params = {
-        "keywords": "Software Engineer",  # adjust keywords accordingly
-        "location": "United States"  # adjust location accordingly
-    }
+# @router.get("/linkedin/callback")
+# def linkedin_callback(code: str, state: str):
+#     client_id = "86us1qxbbhr10l" # "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
+#     client_secret = "WPL_AP1.kTKc2c6u2YZnQefV.OlnH0A=="# "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA==" # Replace with your LinkedIn app's Client Secret"
+#     redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
 
-    response = requests.get(LINKEDIN_API_URL, headers=headers, params=params)
+#     token_url = "https://www.linkedin.com/oauth/v2/accessToken"
+#     payload = {
+#         "grant_type": "authorization_code",
+#         "code": code,
+#         "redirect_uri": redirect_uri,
+#         "client_id": client_id,
+#         "client_secret": client_secret,
+#     }
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch jobs: {response.text}")
-
-    jobs = response.json().get("elements", [])
-
-    for job_data in jobs:
-        # get job information from api
-        job_title = job_data.get("title", "Unknown")
-        job_location = job_data.get("location", "Unknown")
-
-        # store to db
-        new_job = Job(title=job_title, location=job_location)
-        db.add(new_job)
-        db.commit()
-        db.refresh(new_job)
-
-    return {"message": "Jobs fetched and saved successfully", "count": len(jobs)}
-@router.get("/linkedin/auth")
-def linkedin_auth():
-    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
-    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
-    state = "8T0dAfxEXzf4xqbKSCum_Q"  # Replace with a secure random string
-    scope = "r_liteprofile r_emailaddress"  # Add scopes required for your app
-    auth_url = (
-        f"https://www.linkedin.com/oauth/v2/authorization"
-        f"?response_type=code"
-        f"&client_id={client_id}"
-        f"&redirect_uri={redirect_uri}"
-        f"&state={state}"
-        f"&scope={scope}"
-    )
-    return {"authorization_url": auth_url}
-
-
-@router.get("/linkedin/callback")
-def linkedin_callback(code: str, state: str):
-    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
-    client_secret = "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA==" # Replace with your LinkedIn app's Client Secret"
-    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
-
-    token_url = "https://www.linkedin.com/oauth/v2/accessToken"
-    payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": redirect_uri,
-        "client_id": client_id,
-        "client_secret": client_secret,
-    }
-
-    response = requests.post(token_url, data=payload)
-    if response.status_code == 200:
-        access_token = response.json().get("access_token")
-        return {"access_token": access_token}
-    else:
-        return {"error": response.text}, response.status_code
+#     response = requests.post(token_url, data=payload)
+#     if response.status_code == 200:
+#         access_token = response.json().get("access_token")
+#         return {"access_token": access_token}
+#     else:
+#         return {"error": response.text}, response.status_code
 
 
 @router.get("/jobs/home")
@@ -115,6 +152,7 @@ def fetch_jobs(db: Session = Depends(get_db_sync)):
             send_email(user, "New Job Posted", f"Check out the new job: {new_job.title} at {new_job.location}")
 
     return {"message": "Jobs fetched and users notified successfully"}
+
 # Create a job (sync)
 @router.post("/jobs/", status_code=201)
 def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
