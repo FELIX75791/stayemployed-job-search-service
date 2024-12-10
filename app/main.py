@@ -1,3 +1,32 @@
+# Gmail API Integration
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+import os
+import base64
+
+SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+def send_email(to, subject, body):
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            raise Exception("Gmail API credentials are missing or invalid.")
+
+    service = build("gmail", "v1", credentials=creds)
+    message = {
+        "raw": base64.urlsafe_b64encode(
+            f"To: {to}\nSubject: {subject}\n\n{body}".encode("utf-8")
+        ).decode("utf-8")
+    }
+    service.users().messages().send(userId="me", body=message).execute()
+
+
+
 from fastapi import FastAPI,Request
 from app.routes import router  # Import the router from routes.py
 from starlette.middleware.base import BaseHTTPMiddleware
