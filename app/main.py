@@ -75,6 +75,13 @@ app.add_middleware(LoggingMiddleware)
 # Register the router for job-related routes
 app.include_router(router)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the Job Search Service!"}
