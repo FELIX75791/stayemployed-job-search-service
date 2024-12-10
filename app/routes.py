@@ -98,9 +98,18 @@ def get_user_emails():
         raise HTTPException(status_code=500, detail=f"Error fetching user emails: {str(e)}")
 
 @router.post("/jobs/fetch")
-async def fetch_jobs(db: AsyncSession = Depends(get_db_async)):
-    # Await the result of the get_jobs function
-    jobs_response = await get_jobs()
+async def fetch_jobs(request: Request, db: AsyncSession = Depends(get_db_async)):
+    # Construct the CareerjetRequest object
+    item = CareerjetRequest(
+        location="New York",  # Adjust as needed
+        keywords="Software Engineer",  # Adjust as needed
+        sort="relevance",
+        contract_period="full time",
+        purpose="dashboard"
+    )
+
+    # Call get_jobs with the required parameters
+    jobs_response = await get_jobs(request, item, db)
     jobs = jobs_response.get("job_list", [])  # Extract job list from the response
 
     for job in jobs:
@@ -128,6 +137,7 @@ async def fetch_jobs(db: AsyncSession = Depends(get_db_async)):
             )
 
     return {"message": "Jobs fetched and notifications sent successfully"}
+
 
 
 # Create a job (sync)
