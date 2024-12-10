@@ -1,29 +1,49 @@
-# Gmail API Integration
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
 import os
-import base64
+import requests
+from dotenv import load_dotenv
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+# Load environment variables from the .env file
+load_dotenv()
+
+# Fetch Mailgun credentials from environment variables
+MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+
+if not MAILGUN_API_KEY or not MAILGUN_DOMAIN:
+    raise ValueError("MAILGUN_API_KEY and MAILGUN_DOMAIN must be set in the .env file.")
 
 def send_email(to, subject, body):
-    creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            raise Exception("Gmail API credentials are missing or invalid.")
+    """
+    Sends an email using Mailgun API.
 
-    service = build("gmail", "v1", credentials=creds)
-    message = {
-        "raw": base64.urlsafe_b64encode(
-            f"To: {to}\nSubject: {subject}\n\n{body}".encode("utf-8")
-        ).decode("utf-8")
-    }
-    service.users().messages().send(userId="me", body=message).execute()
+    Parameters:
+        to (str): Recipient's email address.
+        subject (str): Subject of the email.
+        body (str): Body content of the email.
+    """
+    MAILGUN_API_KEY = os.getenv("MAILGUN_API_KEY")
+    MAILGUN_DOMAIN = os.getenv("MAILGUN_DOMAIN")
+    MAILGUN_BASE_URL = f"https://api.mailgun.net/v3/{MAILGUN_DOMAIN}"
+
+    if not all([MAILGUN_API_KEY, MAILGUN_DOMAIN]):
+        raise ValueError("Mailgun API key and domain must be set as environment variables.")
+
+    response = requests.post(
+        f"{MAILGUN_BASE_URL}/messages",
+        auth=("api", MAILGUN_API_KEY),
+        data={
+            "from": f"jobsearch <mailgun@{MAILGUN_DOMAIN}>",
+            "to": to,
+            "subject": subject,
+            "text": body
+        }
+    )
+
+    if response.status_code == 200:
+        print(f"Email sent successfully to {to}")
+    else:
+        print(f"Failed to send email to {to}: {response.status_code} - {response.text}")
+        response.raise_for_status()
 
 
 
