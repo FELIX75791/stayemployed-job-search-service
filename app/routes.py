@@ -89,8 +89,10 @@ def get_user_emails():
         raise HTTPException(status_code=500, detail=f"Error fetching user emails: {str(e)}")
 
 @router.post("/jobs/fetch")
-def fetch_jobs(db: Session = Depends(get_db_sync)):
-    jobs = get_jobs()  # Implement this function to fetch jobs
+async def fetch_jobs(db: AsyncSession = Depends(get_db_async)):
+    # Await the result of the get_jobs function
+    jobs_response = await get_jobs()
+    jobs = jobs_response.get("job_list", [])  # Extract job list from the response
 
     for job in jobs:
         new_job = Job(
@@ -98,11 +100,12 @@ def fetch_jobs(db: Session = Depends(get_db_sync)):
             location=job.get("location", "Unknown")
         )
         db.add(new_job)
-        db.commit()
-        db.refresh(new_job)
+        await db.commit()
+        await db.refresh(new_job)
 
-        # Fetch user emails from user_profile_url
-        email_list = get_user_emails()  # Implement this function to fetch user emails
+        # Fetch user emails
+        email_data = get_user_emails()
+        email_list = email_data.get("emails", [])
 
         if not email_list:
             raise HTTPException(status_code=404, detail="No emails found.")
@@ -116,6 +119,8 @@ def fetch_jobs(db: Session = Depends(get_db_sync)):
             )
 
     return {"message": "Jobs fetched and notifications sent successfully"}
+
+
 
 
 # Create a job (sync)
@@ -150,33 +155,21 @@ async def get_jobs(
     total_count = await db.scalar(select(func.count()).select_from(Job))
     total_pages = (total_count + page_size - 1) // page_size
 
-    job_data = [
-        {
-            "job_id": job.id,
-            "title": job.title,
-            "location": job.location,
-            "links": [
-                Link(rel="self", href=f"{BASE_URL}/jobs/{job.id}").dict(),
-                Link(rel="apply", href=f"{BASE_URL}/application-management/apply/{job.id}").dict()
-            ]
-        }
-        for job in job_list
-    ]
-
-    links = [Link(rel="self", href=f"{BASE_URL}/jobs?page={page}&page_size={page_size}").dict()]
-    if page > 1:
-        links.append(Link(rel="previous", href=f"{BASE_URL}/jobs?page={page-1}&page_size={page_size}").dict())
-    if page < total_pages:
-        links.append(Link(rel="next", href=f"{BASE_URL}/jobs?page={page+1}&page_size={page_size}").dict())
-
     return {
         "page": page,
         "page_size": page_size,
         "total_count": total_count,
         "total_pages": total_pages,
-        "jobs": job_data,
-        "links": links
+        "job_list": [
+            {
+                "job_id": job.id,
+                "title": job.title,
+                "location": job.location
+            }
+            for job in job_list
+        ]
     }
+
 
 
 
