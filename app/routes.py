@@ -33,7 +33,7 @@ def linkedin_auth():
 @router.get("/linkedin/callback")
 def linkedin_callback(code: str, state: str):
     client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
-    client_secret = "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA== # Replace with your LinkedIn app's Client Secret"
+    client_secret = "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA==" # Replace with your LinkedIn app's Client Secret"
     redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
 
     token_url = "https://www.linkedin.com/oauth/v2/accessToken"
