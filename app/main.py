@@ -1,32 +1,62 @@
-# app/main.py
+# Gmail API Integration
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+import os
+import base64
 
-from fastapi import FastAPI, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select  # Import select from sqlalchemy.future
-from app.database import get_db
-from app.models import Job
-from app.schemas import JobCreate
+SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+
+def send_email(to, subject, body):
+    creds = None
+    if os.path.exists("token.json"):
+        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            raise Exception("Gmail API credentials are missing or invalid.")
+
+    service = build("gmail", "v1", credentials=creds)
+    message = {
+        "raw": base64.urlsafe_b64encode(
+            f"To: {to}\nSubject: {subject}\n\n{body}".encode("utf-8")
+        ).decode("utf-8")
+    }
+    service.users().messages().send(userId="me", body=message).execute()
 
 
+
+from fastapi import FastAPI,Request
+from app.routes import router  # Import the router from routes.py
+from starlette.middleware.base import BaseHTTPMiddleware
+import time
 app = FastAPI()
 
-@app.post("/jobs/")
-async def create_job(job: JobCreate, db: AsyncSession = Depends(get_db)):
-    new_job = Job(title=job.title, location=job.location)
-    db.add(new_job)
-    await db.commit()
-    await db.refresh(new_job)
-    return new_job
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        # Log request details
+        start_time = time.time()
+        print(f"Request: {request.method} {request.url}")
 
-@app.get("/jobs/")
-async def read_jobs(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Job))
-    jobs = result.scalars().all()
-    return jobs
+        # Process request and get response
+        response = await call_next(request)
+
+        # Calculate and log response time
+        process_time = time.time() - start_time
+        print(f"Completed in {process_time:.4f} seconds")
+
+        return response
+
+# Add middleware to the FastAPI app
+app.add_middleware(LoggingMiddleware)
+# Register the router for job-related routes
+app.include_router(router)
 
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the Job Search Service!"}
+
 
 
 
