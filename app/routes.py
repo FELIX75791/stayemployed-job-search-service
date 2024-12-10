@@ -82,39 +82,6 @@ def linkedin_callback(code: str, state: str):
     else:
         return {"error": response.text}, response.status_code
 
-@router.post("/linkedin/fetch-jobs")
-def fetch_jobs_from_linkedin(db: Session = Depends(get_db_sync)):
-    """
-    从 LinkedIn API 获取职位信息并保存到数据库
-    """
-    LINKEDIN_ACCESS_TOKEN = "your_access_token"  # 替换为你的 LinkedIn Access Token
-    LINKEDIN_JOB_API_URL = "https://api.linkedin.com/v2/jobPosts"
-
-    # 请求头
-    headers = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}",
-        "Content-Type": "application/json",
-    }
-
-    # 调用 LinkedIn API
-    response = requests.get(LINKEDIN_JOB_API_URL, headers=headers)
-
-    if response.status_code == 200:
-        jobs = response.json()  # 根据 API 返回的格式调整解析逻辑
-        for job in jobs.get("elements", []):  # 假设职位信息在 "elements" 键中
-            # 提取职位信息字段
-            title = job.get("title", {}).get("text", "Unknown Title")
-            location = job.get("location", {}).get("city", "Unknown Location")
-
-            # 保存到数据库
-            new_job = Job(title=title, location=location)
-            db.add(new_job)
-
-        db.commit()
-        return {"message": "Jobs fetched and saved successfully"}
-    else:
-        raise HTTPException(status_code=response.status_code, detail=response.text)
-
 
 @router.get("/jobs/home")
 def show_jobs_homepage(db: Session = Depends(get_db_sync)):
