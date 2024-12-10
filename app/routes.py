@@ -10,8 +10,10 @@ import requests
 from app.main import send_email
 from careerjet_api import CareerjetAPIClient
 from pydantic import BaseModel
+import os
 
 router = APIRouter()
+USER_PROFILE_SERVICE_URL=os.getenv("USER_PROFILE_SERVICE_URL","http://44.211.146.131:8080/users/notifications-enabled")
 class CareerjetRequest(BaseModel):
     location: str
     keywords: str
@@ -82,25 +84,51 @@ def show_jobs_homepage(db: Session = Depends(get_db_sync)):
 
     return {"jobs": job_list}
 
+@router.get("/get-user-emails")
+def get_user_emails():
+    try:
+        # 调用 user-profile 微服务的 API
+        response = requests.get(USER_PROFILE_SERVICE_URL)
+        response.raise_for_status()
+        data = response.json()
+        email_list = data
+        return {"emails": email_list}
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching user emails: {str(e)}")
 
 @router.post("/jobs/fetch")
-def fetch_jobs(db: Session = Depends(get_db_sync)):
-    # jobs = fetch_jobs_from_linkedin()
+async def fetch_jobs(db: AsyncSession = Depends(get_db_async)):
+    # Await the result of the get_jobs function
+    jobs_response = await get_jobs()
+    jobs = jobs_response.get("job_list", [])  # Extract job list from the response
+
     for job in jobs:
         new_job = Job(
             title=job.get("title", "Unknown"),
             location=job.get("location", "Unknown")
         )
         db.add(new_job)
-        db.commit()
-        db.refresh(new_job)
+        await db.commit()
+        await db.refresh(new_job)
 
-        # Notify users
-        users = ["user1@example.com", "user2@example.com"]  # Replace with actual user emails list
-        for user in users:
-            send_email(user, "New Job Posted", f"Check out the new job: {new_job.title} at {new_job.location}")
+        # Fetch user emails
+        email_data = get_user_emails()
+        email_list = email_data.get("emails", [])
 
-    return {"message": "Jobs fetched and users notified successfully"}
+        if not email_list:
+            raise HTTPException(status_code=404, detail="No emails found.")
+
+        # Send email notifications
+        for user_email in email_list:
+            send_email(
+                user_email,
+                "New Job Posted",
+                f"Check out the new job: {new_job.title} at {new_job.location}"
+            )
+
+    return {"message": "Jobs fetched and notifications sent successfully"}
+
 
 # Create a job (sync)
 @router.post("/jobs/", status_code=201)
