@@ -38,6 +38,9 @@ def fetch_jobs_from_careerjet(request: Request, item: dict, db: Session = Depend
 
   job_list = available_jobs["jobs"]
 
+  if len(available_jobs) == 0:
+    return {"message": "No job found."}
+
   for job_data in job_list:
     # get job information from api
     job_title = job_data.get("title")
