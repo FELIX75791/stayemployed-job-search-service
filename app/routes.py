@@ -13,6 +13,36 @@ router = APIRouter()
 LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
 LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
 
+
+@router.post("/linkedin/fetch-jobs")
+def fetch_jobs_from_linkedin(db: Session = Depends(get_db_sync)):
+    headers = {
+        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"
+    }
+    params = {
+        "keywords": "Software Engineer",  # adjust keywords accordingly
+        "location": "United States"  # adjust location accordingly
+    }
+
+    response = requests.get(LINKEDIN_API_URL, headers=headers, params=params)
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch jobs: {response.text}")
+
+    jobs = response.json().get("elements", [])
+
+    for job_data in jobs:
+        # get job information from api
+        job_title = job_data.get("title", "Unknown")
+        job_location = job_data.get("location", "Unknown")
+
+        # store to db
+        new_job = Job(title=job_title, location=job_location)
+        db.add(new_job)
+        db.commit()
+        db.refresh(new_job)
+
+    return {"message": "Jobs fetched and saved successfully", "count": len(jobs)}
 @router.get("/linkedin/auth")
 def linkedin_auth():
     client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
@@ -53,13 +83,19 @@ def linkedin_callback(code: str, state: str):
         return {"error": response.text}, response.status_code
 
 
-def fetch_jobs_from_linkedin():
-    headers = {"Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"}
-    response = requests.get(LINKEDIN_API_URL, headers=headers)
-    if response.status_code == 200:
-        return response.json()  # Adjust this to match LinkedIn's job data format
-    else:
-        raise Exception(f"Error fetching jobs: {response.text}")
+@router.get("/jobs/home")
+def show_jobs_homepage(db: Session = Depends(get_db_sync)):
+    jobs = db.query(Job).all()
+
+    job_list = [
+        {
+            "title": job.title,
+            "location": job.location
+        } for job in jobs
+    ]
+
+    return {"jobs": job_list}
+
 
 @router.post("/jobs/fetch")
 def fetch_jobs(db: Session = Depends(get_db_sync)):
