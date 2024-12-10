@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -8,79 +8,65 @@ from app.models import Job, Link, BASE_URL
 from app.schemas import JobCreate
 import requests
 from app.main import send_email
+from careerjet_api import CareerjetAPIClient
+from pydantic import BaseModel
 
 router = APIRouter()
-LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
-LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
+class CareerjetRequest(BaseModel):
+    location: str
+    keywords: str
+    sort: str
+    contract_period: str
+    purpose: str
 
 
-@router.post("/linkedin/fetch-jobs")
-def fetch_jobs_from_linkedin(db: Session = Depends(get_db_sync)):
-    headers = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"
-    }
-    params = {
-        "keywords": "Software Engineer",  # adjust keywords accordingly
-        "location": "United States"  # adjust location accordingly
-    }
+@router.post("/fetch-jobs")
+async def get_jobs(request: Request, item: CareerjetRequest, db: Session = Depends(get_db_sync)):
+    cj  =  CareerjetAPIClient("en_US")
+    user_ip = request.client.host
+    full_url = str(request.url)
 
-    response = requests.get(LINKEDIN_API_URL, headers=headers, params=params)
+    location = item.location
+    keywords = item.keywords
+    sort = item.sort
+    contract_period = item.contract_period
+    purpose = item.purpose
 
-    if response.status_code != 200:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch jobs: {response.text}")
+    available_jobs = cj.search({
+      'location': location,                 
+      'keywords': keywords,
+      'sort': sort,   
+      'contractperiod': contract_period,             
+      'affid': '213e213hd12344552',
+      'user_ip': user_ip,
+      'url': full_url,
+      'user_agent': 'Mozilla/5.0',
+    })
 
-    jobs = response.json().get("elements", [])
+    job_list = available_jobs["jobs"]
+    save_jobs = available_jobs["jobs"][:10]
+    
+    if len(available_jobs) == 0:
+        return {"message": "No job found."}
+    
+    if purpose == "dashboard":
+        job_list = job_list[:10]
 
-    for job_data in jobs:
-        # get job information from api
-        job_title = job_data.get("title", "Unknown")
-        job_location = job_data.get("location", "Unknown")
+    # for job_data in save_jobs:
+    #   # get job information from api
+    #   job_title = job_data.get("title")
+    #   job_location = job_data.get("locations")
+    #   # store to db
+    #   new_job = Job(title=job_title, location=job_location)
+    #   db.add(new_job)
+    #   db.commit()
+    #   db.refresh(new_job)
 
-        # store to db
-        new_job = Job(title=job_title, location=job_location)
-        db.add(new_job)
-        db.commit()
-        db.refresh(new_job)
-
-    return {"message": "Jobs fetched and saved successfully", "count": len(jobs)}
-@router.get("/linkedin/auth")
-def linkedin_auth():
-    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
-    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
-    state = "8T0dAfxEXzf4xqbKSCum_Q"  # Replace with a secure random string
-    scope = "r_liteprofile r_emailaddress"  # Add scopes required for your app
-    auth_url = (
-        f"https://www.linkedin.com/oauth/v2/authorization"
-        f"?response_type=code"
-        f"&client_id={client_id}"
-        f"&redirect_uri={redirect_uri}"
-        f"&state={state}"
-        f"&scope={scope}"
-    )
-    return {"authorization_url": auth_url}
-
-
-@router.get("/linkedin/callback")
-def linkedin_callback(code: str, state: str):
-    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
-    client_secret = "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA==" # Replace with your LinkedIn app's Client Secret"
-    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
-
-    token_url = "https://www.linkedin.com/oauth/v2/accessToken"
-    payload = {
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": redirect_uri,
-        "client_id": client_id,
-        "client_secret": client_secret,
-    }
-
-    response = requests.post(token_url, data=payload)
-    if response.status_code == 200:
-        access_token = response.json().get("access_token")
-        return {"access_token": access_token}
-    else:
-        return {"error": response.text}, response.status_code
+    return {
+            "message": "Jobs fetched and saved successfully",
+            "count": len(job_list),
+            "job_list": job_list,
+            }
 
 
 @router.get("/jobs/home")
@@ -99,7 +85,7 @@ def show_jobs_homepage(db: Session = Depends(get_db_sync)):
 
 @router.post("/jobs/fetch")
 def fetch_jobs(db: Session = Depends(get_db_sync)):
-    jobs = fetch_jobs_from_linkedin()
+    # jobs = fetch_jobs_from_linkedin()
     for job in jobs:
         new_job = Job(
             title=job.get("title", "Unknown"),
@@ -115,6 +101,7 @@ def fetch_jobs(db: Session = Depends(get_db_sync)):
             send_email(user, "New Job Posted", f"Check out the new job: {new_job.title} at {new_job.location}")
 
     return {"message": "Jobs fetched and users notified successfully"}
+
 # Create a job (sync)
 @router.post("/jobs/", status_code=201)
 def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
@@ -132,49 +119,6 @@ def create_job(job: JobCreate, db: Session = Depends(get_db_sync)):
             Link(rel="apply", href=f"{BASE_URL}/application-management/apply/{new_job.id}").dict()
         ]
     }
-
-
-# Read all jobs (async) with pagination
-@router.get("/jobs/")
-async def get_jobs(
-    page: int = Query(1, ge=1),
-    page_size: int = Query(10, ge=1),
-    db: AsyncSession = Depends(get_db_async)
-):
-    offset = (page - 1) * page_size
-    jobs = await db.execute(select(Job).offset(offset).limit(page_size))
-    job_list = jobs.scalars().all()
-    total_count = await db.scalar(select(func.count()).select_from(Job))
-    total_pages = (total_count + page_size - 1) // page_size
-
-    job_data = [
-        {
-            "job_id": job.id,
-            "title": job.title,
-            "location": job.location,
-            "links": [
-                Link(rel="self", href=f"{BASE_URL}/jobs/{job.id}").dict(),
-                Link(rel="apply", href=f"{BASE_URL}/application-management/apply/{job.id}").dict()
-            ]
-        }
-        for job in job_list
-    ]
-
-    links = [Link(rel="self", href=f"{BASE_URL}/jobs?page={page}&page_size={page_size}").dict()]
-    if page > 1:
-        links.append(Link(rel="previous", href=f"{BASE_URL}/jobs?page={page-1}&page_size={page_size}").dict())
-    if page < total_pages:
-        links.append(Link(rel="next", href=f"{BASE_URL}/jobs?page={page+1}&page_size={page_size}").dict())
-
-    return {
-        "page": page,
-        "page_size": page_size,
-        "total_count": total_count,
-        "total_pages": total_pages,
-        "jobs": job_data,
-        "links": links
-    }
-
 
 
 # Update a job by ID (sync)
