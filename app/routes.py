@@ -82,7 +82,7 @@ def get_user_emails():
         response = requests.get(USER_PROFILE_SERVICE_URL)
         response.raise_for_status()
         data = response.json()
-        email_list = data.get("emails", [])
+        email_list = data
         return {"emails": email_list}
 
     except requests.exceptions.RequestException as e:
