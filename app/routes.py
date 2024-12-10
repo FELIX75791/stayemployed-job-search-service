@@ -22,7 +22,7 @@ class CareerjetRequest(BaseModel):
     purpose: str
 
 
-@router.post("/fetch-jobs")
+@router.post("/fetch-jobs/")
 async def get_jobs(request: Request, item: CareerjetRequest, db: Session = Depends(get_db_sync)):
     cj  =  CareerjetAPIClient("en_US")
     user_ip = request.client.host
