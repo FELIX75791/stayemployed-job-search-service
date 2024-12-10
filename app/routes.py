@@ -13,6 +13,46 @@ router = APIRouter()
 LINKEDIN_API_URL = "https://api.linkedin.com/v2/jobPosts"
 LINKEDIN_ACCESS_TOKEN = "linkedin_api_access_token"  # Replace with actual token
 
+@router.get("/linkedin/auth")
+def linkedin_auth():
+    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
+    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
+    state = "8T0dAfxEXzf4xqbKSCum_Q"  # Replace with a secure random string
+    scope = "r_liteprofile r_emailaddress"  # Add scopes required for your app
+    auth_url = (
+        f"https://www.linkedin.com/oauth/v2/authorization"
+        f"?response_type=code"
+        f"&client_id={client_id}"
+        f"&redirect_uri={redirect_uri}"
+        f"&state={state}"
+        f"&scope={scope}"
+    )
+    return {"authorization_url": auth_url}
+
+
+@router.get("/linkedin/callback")
+def linkedin_callback(code: str, state: str):
+    client_id = "869sr8v75oww0e"  # Replace with your LinkedIn app's Client ID
+    client_secret = "WPL_AP1.V3ffAiQmxuDeLW4n.MoIjIA== # Replace with your LinkedIn app's Client Secret"
+    redirect_uri = "http://3.213.98.62:8080/linkedin/callback"
+
+    token_url = "https://www.linkedin.com/oauth/v2/accessToken"
+    payload = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "client_id": client_id,
+        "client_secret": client_secret,
+    }
+
+    response = requests.post(token_url, data=payload)
+    if response.status_code == 200:
+        access_token = response.json().get("access_token")
+        return {"access_token": access_token}
+    else:
+        return {"error": response.text}, response.status_code
+
+
 def fetch_jobs_from_linkedin():
     headers = {"Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"}
     response = requests.get(LINKEDIN_API_URL, headers=headers)
