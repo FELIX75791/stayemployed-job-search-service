@@ -16,7 +16,7 @@ Create a virtual environment and install the dependencies according to requireme
 You can quick start by:
   ```
      uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
-     ```
+  ```
 ## File Descriptions
 
 1. **`database.py`**
