@@ -1,8 +1,8 @@
-#Job Search Microservice
+# Job Search Microservice
 
 
 
-##Overview
+## Overview
 
 This repo contains the reference implementation for the **job-search microservice** in project **stayemployeed**
 
@@ -10,13 +10,13 @@ This repo contains the reference implementation for the **job-search microservic
 
 Create a virtual environment and install the dependencies according to requirements.txt. The microservice has been deployed on AWS, with data stored in RDS, with job information fetched from Careerjet API
 
-##Quick-Start
+## Quick-Start
 
 **If you need to run the microservice with notification function, please contact the author with the email API key and domain.**
 
 '''uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload'''
 
-##### ##File Descriptions
+## File Descriptions
 
 1. **`database.py`**
 
