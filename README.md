@@ -13,8 +13,8 @@ Create a virtual environment and install the dependencies according to requireme
 ## Quick-Start
 
 **If you need to run the microservice with notification function, please contact the author with the email API key and domain.**
-
-'''uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload'''
+You can quick start by:
+''' uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload '''
 
 ## File Descriptions
 
