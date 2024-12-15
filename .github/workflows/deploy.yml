@@ -1,0 +1,51 @@
+name: CI/CD Pipeline for Job Search Microservice
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the repository
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    # Set up Python
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+
+    # Install dependencies
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Run Tests
+    - name: Run Tests
+      run: |
+        pytest tests/
+
+    # Build the Docker image
+    - name: Build Docker Image
+      run: |
+        docker build -t job-search-service .
+
+    # Deploy to AWS EC2
+    - name: Deploy to AWS EC2
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          docker stop job-search-service || true
+          docker rm job-search-service || true
+          docker rmi job-search-service || true
+          docker load < job-search-service.tar
+          docker run -d -p 80:80 --name job-search-service job-search-service
